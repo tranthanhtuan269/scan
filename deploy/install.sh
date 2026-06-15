@@ -34,7 +34,7 @@ apt-get install -y -qq \
 
 # Detect PHP-FPM socket
 if [[ -z "$PHP_FPM_SOCK" ]]; then
-    for sock in /run/php/php8.3-fpm.sock /run/php/php8.2-fpm.sock /run/php/php8.1-fpm.sock; do
+    for sock in /run/php/php8.5-fpm.sock /run/php/php8.3-fpm.sock /run/php/php8.2-fpm.sock /run/php/php8.1-fpm.sock; do
         if [[ -S "$sock" ]]; then
             PHP_FPM_SOCK="$sock"
             break
@@ -63,9 +63,15 @@ pip3 install --break-system-packages -q -r requirements.txt 2>/dev/null \
 
 echo "==> MySQL database..."
 mysql -e "CREATE DATABASE IF NOT EXISTS \`${DB_NAME}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+TABLE_COUNT=$(mysql -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='${DB_NAME}';" 2>/dev/null || echo 0)
 if [[ "$TABLE_COUNT" -eq 0 && "$IMPORT_DUMP" == "1" && -f "$APP_DIR/db/couponspeak_crawl_dump.sql" ]]; then
     echo "==> Importing database dump (may take a few minutes)..."
-    mysql < "$APP_DIR/db/couponspeak_crawl_dump.sql"
+    if head -c 2 "$APP_DIR/db/couponspeak_crawl_dump.sql" | grep -q $'^\xff\xfe'; then
+        iconv -f UTF-16LE -t UTF-8 "$APP_DIR/db/couponspeak_crawl_dump.sql" | mysql --default-character-set=utf8mb4
+    else
+        mysql --default-character-set=utf8mb4 < "$APP_DIR/db/couponspeak_crawl_dump.sql"
+    fi
+    mysql "$DB_NAME" < "$APP_DIR/db/migrations/001_add_sitename.sql" 2>/dev/null || true
 elif [[ "$TABLE_COUNT" -eq 0 ]]; then
     echo "==> Initializing schema..."
     cp "$APP_DIR/.env.example" "$APP_DIR/.env.bootstrap"
@@ -100,10 +106,11 @@ FULL_CRAWL_INTERVAL_DAYS=7
 INCREMENTAL_TIER3_BATCH=200
 SEARCH_MAX_PAGES=50
 EOF
-chmod 600 "$APP_DIR/.env"
+chmod 640 "$APP_DIR/.env"
+chown www-data:www-data "$APP_DIR/.env"
 
 echo "==> Nginx..."
-sed "s|unix:/run/php/php8.3-fpm.sock|unix:${PHP_FPM_SOCK}|" "$APP_DIR/deploy/nginx.conf" \
+sed "s|unix:/run/php/php8.5-fpm.sock|unix:${PHP_FPM_SOCK}|" "$APP_DIR/deploy/nginx.conf" \
     > /etc/nginx/sites-available/scan
 ln -sf /etc/nginx/sites-available/scan /etc/nginx/sites-enabled/scan
 rm -f /etc/nginx/sites-enabled/default

@@ -1,0 +1,27 @@
+RewriteEngine On
+DirectoryIndex index.php
+
+# Không hardcode RewriteBase — Apache tự detect:
+#   scan.test (docroot = web/)     → /
+#   localhost/scan/web/            → /scan/web/
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+RewriteRule ^store/([a-zA-Z0-9._-]+)/?$ store.php?slug=$1 [L,QSA]
+RewriteRule ^blog/([a-zA-Z0-9._-]+)/?$ blog-post.php?slug=$1 [L,QSA]
+RewriteRule ^deals/?$ deals.php [L,QSA]
+RewriteRule ^blog/?$ blog.php [L,QSA]
+RewriteRule ^stores/?$ stores.php [L,QSA]
+RewriteRule ^search/?$ search.php [L,QSA]
+
+RewriteRule ^api/?$ api/index.php [L,QSA]
+RewriteRule ^api/coupons/?$ api/coupons.php [L,QSA]
+RewriteRule ^api/search/?$ api/search.php [L,QSA]
+RewriteRule ^api/store/([a-zA-Z0-9._-]+)/?$ api/store.php?slug=$1 [L,QSA]
+
+RewriteRule ^$ index.php [L,QSA]
+
+# URL không khớp route nào → trang 404 custom
+RewriteRule ^.+$ 404.php [L,QSA]

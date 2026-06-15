@@ -50,9 +50,13 @@ Mặc định `install.sh` thêm cron 06:00 mỗi ngày:
 0 6 * * * cd /var/www/scan && python3 jobs/daily_crawl.py >> logs/cron.log 2>&1
 ```
 
-## SSL (khi có domain)
+### SSL (khi có domain)
+
+DNS: thêm bản ghi **A** `scan.thuoc360.com` → `5.78.124.80` (tắt proxy Cloudflare lúc cấp SSL, hoặc dùng SSL mode Flexible).
 
 ```bash
 sudo apt install certbot python3-certbot-nginx
-sudo certbot --nginx -d scan.yourdomain.com
+sudo certbot --nginx -d scan.thuoc360.com
 ```
+
+Truy cập: **https://scan.thuoc360.com/** — API: `https://scan.thuoc360.com/api/coupons?site=thuoc360&store=alsoasked`

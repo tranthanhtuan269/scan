@@ -60,3 +60,11 @@ sudo certbot --nginx -d scan.thuoc360.com
 ```
 
 Truy cập: **https://scan.thuoc360.com/** — API: `https://scan.thuoc360.com/api/coupons?site=thuoc360&store=alsoasked`
+
+### phpMyAdmin
+
+```bash
+MYSQL_ROOT_PASS='your-mysql-root-password' bash deploy/install-phpmyadmin.sh
+```
+
+URL: **https://scan.thuoc360.com/phpmyadmin** — đăng nhập MySQL `root` + mật khẩu bạn đặt.

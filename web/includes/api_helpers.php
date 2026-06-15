@@ -27,6 +27,39 @@ function api_error(string $message, int $status = 400, array $extra = []): never
     ], $extra), $status);
 }
 
+/**
+ * Require ?site=... and verify it exists in sitename table.
+ *
+ * @return array{id: int, name: string, label: ?string, is_active: int}
+ */
+function api_require_site(): array
+{
+    $site = strtolower(trim($_GET['site'] ?? ''));
+
+    if ($site === '') {
+        api_error('Missing site parameter. Use ?site=your-site-name');
+    }
+
+    if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,99}$/', $site)) {
+        api_error('Invalid site name. Use letters, numbers, hyphen, underscore only.');
+    }
+
+    $row = db_fetch(
+        'SELECT id, name, label, is_active FROM sitename WHERE name = ? LIMIT 1',
+        [$site]
+    );
+
+    if (!$row) {
+        api_error('Site not registered.', 403, ['site' => $site]);
+    }
+
+    if (!(int) $row['is_active']) {
+        api_error('Site is disabled.', 403, ['site' => $site]);
+    }
+
+    return $row;
+}
+
 /** @param array<string, mixed> $store */
 function api_format_store(array $store, int $activeOffers = 0): array
 {

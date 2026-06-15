@@ -2,13 +2,15 @@
 declare(strict_types=1);
 
 /**
- * GET /api/coupons?store=alsoasked
- * GET /api/coupons?store=alsoasked&page=1&limit=50
+ * GET /api/coupons?site=thuoc360&store=alsoasked
+ * GET /api/coupons?site=thuoc360&store=alsoasked&page=1&limit=50
  *
  * Tìm coupon theo tên store (name/slug) hoặc affiliate_url chứa từ khóa.
- * Chỉ trả coupon có affiliate_url.
+ * Chỉ trả coupon có affiliate_url. Yêu cầu site đã đăng ký trong bảng sitename.
  */
 require_once __DIR__ . '/../includes/api_helpers.php';
+
+$site = api_require_site();
 
 $store = trim($_GET['store'] ?? $_GET['q'] ?? $_GET['name'] ?? '');
 if ($store === '') {
@@ -22,6 +24,7 @@ $pager = paginate($result['total'], $page, $limit);
 if ($result['total'] === 0) {
     api_json([
         'success' => true,
+        'site' => $site['name'],
         'store' => $store,
         'count' => 0,
         'coupons' => [],
@@ -31,6 +34,7 @@ if ($result['total'] === 0) {
 
 api_json([
     'success' => true,
+    'site' => $site['name'],
     'store' => $store,
     'count' => count($result['coupons']),
     'pagination' => [

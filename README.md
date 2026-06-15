@@ -181,6 +181,7 @@ Coupon không còn thấy trên trang store → `status = expired`.
 | `crawl_urls` | Registry URL đã discover |
 
 | `crawl_runs` | Log mỗi lần chạy (fetched, new, updated, skipped) |
+| `sitename` | Whitelist site được phép gọi API (`?site=...`) |
 
 
 
@@ -221,15 +222,18 @@ Truy cập: **http://localhost/scan/web/**
 **Tìm coupon theo tên store:**
 
 ```
-GET /api/coupons?store=alsoasked
-GET /api/search?store=alsoasked
+GET /api/coupons?site=thuoc360&store=alsoasked
+GET /api/search?site=thuoc360&store=alsoasked
 ```
+
+> **Bắt buộc** có param `site` — tên site phải tồn tại trong bảng `sitename` (whitelist). Site không đăng ký → HTTP 403.
 
 Response mẫu:
 
 ```json
 {
   "success": true,
+  "site": "thuoc360",
   "store": "alsoasked",
   "count": 9,
   "coupons": [
@@ -245,11 +249,25 @@ Response mẫu:
 
 | Endpoint | Mô tả |
 |----------|-------|
-| `GET /api/` | Danh sách endpoint |
-| `GET /api/coupons?store={name}` | Tìm coupon theo store (chỉ có affiliate_url) |
-| `GET /api/store/{slug}` | Chi tiết store đầy đủ |
+| `GET /api/` | Danh sách endpoint + site đã đăng ký |
+| `GET /api/coupons?site={site}&store={name}` | Tìm coupon theo store (chỉ có affiliate_url) |
+| `GET /api/store/{slug}?site={site}` | Chi tiết store đầy đủ |
 
 Params: `page`, `limit` (max 200)
+
+### Quản lý site được phép gọi API
+
+Bảng `sitename` — chỉ site có trong bảng mới nhận được dữ liệu:
+
+```sql
+INSERT INTO sitename (name, label, notes) VALUES ('thuoc360', 'Thuoc360', 'Laravel site');
+```
+
+Chạy migration nếu DB đã tồn tại từ trước:
+
+```bash
+mysql -u root couponspeak_crawl < db/migrations/001_add_sitename.sql
+```
 
 ## Cấu trúc project
 

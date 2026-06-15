@@ -2,10 +2,12 @@
 declare(strict_types=1);
 
 /**
- * GET /api/store/chigee
- * GET /api/store/chigee?type=code
+ * GET /api/store/chigee?site=thuoc360
+ * GET /api/store/chigee?site=thuoc360&type=code
  */
 require_once __DIR__ . '/../includes/api_helpers.php';
+
+$site = api_require_site();
 
 $slug = trim($_GET['slug'] ?? '');
 if ($slug === '') {
@@ -22,5 +24,6 @@ $data = api_get_store_with_offers($store, $type);
 
 api_json([
     'success' => true,
+    'site' => $site['name'],
     'data' => $data,
 ]);

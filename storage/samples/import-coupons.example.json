@@ -1,0 +1,29 @@
+{
+  "store": {
+    "domain": "jennibag.com",
+    "slug": "jennibag--hk11",
+    "name": "Jennibag",
+    "affiliate_url": "https://jennibag.com/products/jennitravelbag-2"
+  },
+  "sync_mode": "replace",
+  "coupons": [
+    {
+      "offer_id": "ext-1001",
+      "discount_label": "5% OFF",
+      "title": "Extra 5% Off Sitewide",
+      "coupon_code": "HOANG10362718",
+      "coupon_type": "code",
+      "affiliate_url": "https://jennibag.com/products/jennitravelbag-2?sca_ref=10362718",
+      "is_verified": true,
+      "button_text": "Get Code"
+    },
+    {
+      "offer_id": "ext-1002",
+      "discount_label": "FREE SHIPPING",
+      "title": "Order today and get free shipping",
+      "coupon_type": "deal",
+      "affiliate_url": "https://jennibag.com/products/jennitravelbag-2?sca_ref=10362718",
+      "button_text": "Get Deal"
+    }
+  ]
+}

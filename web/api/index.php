@@ -6,7 +6,7 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 api_json([
     'success' => true,
     'name' => 'CouponSpeak Local API',
-    'version' => '1.1',
+    'version' => '1.2',
     'auth' => [
         'type' => 'site_whitelist',
         'param' => 'site',
@@ -32,6 +32,22 @@ api_json([
             ],
             'response_fields' => ['discount_label', 'title', 'coupon_code', 'coupon_type'],
             'example' => url('api/coupons') . '?site=thuoc360&store=alsoasked',
+        ],
+        [
+            'method' => 'GET',
+            'path' => '/api/coupons/import',
+            'description' => 'View JSON sample for coupon import',
+            'example' => url('api/coupons/import') . '?site=thuoc360',
+        ],
+        [
+            'method' => 'POST',
+            'path' => '/api/coupons/import',
+            'description' => 'Import/push coupons for one store',
+            'params' => [
+                'site' => 'Registered site name (required query param)',
+            ],
+            'body' => 'JSON — see GET /api/coupons/import for sample',
+            'example' => url('api/coupons/import') . '?site=thuoc360',
         ],
         [
             'method' => 'GET',

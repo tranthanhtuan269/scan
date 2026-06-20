@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import subprocess
+from pathlib import Path
+
 from config.settings import RAW_HTML_DIR, SAVE_RAW_HTML
 from crawler.discovery import Discovery
 from crawler.fetcher import Fetcher
@@ -7,6 +10,8 @@ from crawler.parsers.blog import parse_blog_page
 from crawler.parsers.store import parse_store_page
 from crawler.utils import classify_url
 from db.repository import Repository, now
+
+SCAN_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CrawlPipeline:
@@ -90,6 +95,7 @@ class CrawlPipeline:
         self._save_raw(slug, result.text)
         store_id = self.repo.upsert_store(parsed)
         self.repo.sync_coupons(store_id, parsed.get("coupons", []))
+        self.repo.dedupe_coupons_by_label(store_id)
 
         if is_new:
             self.stats["urls_new"] += 1
@@ -98,7 +104,19 @@ class CrawlPipeline:
 
         self.repo.upsert_crawl_url(url, "store", priority=priority)
         self.repo.commit()
+        self._refresh_store_api_lookup(store_id)
         return True
+
+    def _refresh_store_api_lookup(self, store_id: int) -> None:
+        script = SCAN_ROOT / "jobs" / "refresh_store_api_lookup.php"
+        if not script.exists():
+            return
+        subprocess.run(
+            ["php", str(script), str(store_id)],
+            capture_output=True,
+            timeout=30,
+            check=False,
+        )
 
     def process_blog(self, url: str, slug: str | None) -> bool:
         result = self.fetcher.fetch(url)

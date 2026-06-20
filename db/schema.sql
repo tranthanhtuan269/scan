@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     offer_url VARCHAR(512) NULL,
     affiliate_url VARCHAR(512) NULL,
     button_text VARCHAR(50) NULL,
-    status ENUM('active', 'expired', 'removed') DEFAULT 'active',
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
     first_seen_at DATETIME NOT NULL,
     last_seen_at DATETIME NOT NULL,
     last_changed_at DATETIME NOT NULL,

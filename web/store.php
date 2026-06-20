@@ -8,8 +8,10 @@ if ($slug === '') {
     show_404('Store Not Found', 'Invalid store URL.');
 }
 
-$store = get_store_by_slug($slug);
-if (!$store) {
+$rawStore = db_fetch('SELECT * FROM stores WHERE slug = ? AND is_active IN (1, -1)', [$slug])
+    ?: db_fetch('SELECT * FROM stores WHERE LOWER(slug) = LOWER(?) AND is_active IN (1, -1) LIMIT 1', [$slug]);
+
+if (!$rawStore) {
     $suggestions = [];
     foreach (find_similar_stores($slug) as $item) {
         $suggestions[] = [
@@ -23,6 +25,11 @@ if (!$store) {
         'No store matched "' . $slug . '". It may have been removed or the link is outdated.',
         $suggestions
     );
+}
+
+$store = resolve_canonical_store($rawStore);
+if ($store['slug'] !== $rawStore['slug']) {
+    redirect('store/' . $store['slug']);
 }
 
 $coupons = get_store_coupons((int) $store['id']);

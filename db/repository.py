@@ -102,7 +102,7 @@ class Repository:
 
     def get_all_store_slugs(self) -> list[str]:
         rows = self.fetchall(
-            "SELECT slug FROM stores WHERE is_active = 1 ORDER BY priority, last_crawled_at"
+            "SELECT slug FROM stores WHERE is_active IN (1, -1) ORDER BY priority, last_crawled_at"
         )
         return [r["slug"] for r in rows]
 
@@ -255,7 +255,11 @@ class Repository:
                 fail_count = fail_count + 1,
                 http_status = %s,
                 last_crawled_at = %s,
-                is_active = CASE WHEN fail_count >= 5 AND http_status = 404 THEN 0 ELSE is_active END
+                is_active = CASE
+                    WHEN is_active = -1 THEN -1
+                    WHEN fail_count >= 5 AND http_status = 404 THEN 0
+                    ELSE is_active
+                END
             WHERE slug = %s
             """,
             (http_status, now(), slug),
@@ -354,6 +358,65 @@ class Repository:
 
         self.commit()
         return inserted, updated
+
+    def dedupe_coupons_by_label(self, store_id: int) -> int:
+        """Mark duplicate active coupons (same discount_label, case-insensitive) as legacy (-1)."""
+        row = self.fetchone(
+            """
+            SELECT COUNT(*) AS c FROM (
+                SELECT id
+                FROM (
+                    SELECT id,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY LOWER(TRIM(discount_label))
+                            ORDER BY is_verified DESC,
+                                (coupon_code IS NOT NULL AND coupon_code != '') DESC,
+                                last_seen_at DESC,
+                                id ASC
+                        ) AS rn
+                    FROM coupons
+                    WHERE store_id = %s
+                      AND status = 'active'
+                      AND discount_label IS NOT NULL
+                      AND TRIM(discount_label) != ''
+                ) ranked
+                WHERE ranked.rn > 1
+            ) losers
+            """,
+            (store_id,),
+        )
+        count = int(row["c"] or 0) if row else 0
+        if count == 0:
+            return 0
+
+        ts = now()
+        self.execute(
+            """
+            UPDATE coupons c
+            INNER JOIN (
+                SELECT id FROM (
+                    SELECT id,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY LOWER(TRIM(discount_label))
+                            ORDER BY is_verified DESC,
+                                (coupon_code IS NOT NULL AND coupon_code != '') DESC,
+                                last_seen_at DESC,
+                                id ASC
+                        ) AS rn
+                    FROM coupons
+                    WHERE store_id = %s
+                      AND status = 'active'
+                      AND discount_label IS NOT NULL
+                      AND TRIM(discount_label) != ''
+                ) ranked
+                WHERE ranked.rn > 1
+            ) losers ON losers.id = c.id
+            SET c.status = '-1', c.last_changed_at = %s
+            """,
+            (store_id, ts),
+        )
+        self.commit()
+        return count
 
     def upsert_page(self, data: dict) -> bool:
         existing = self.fetchone("SELECT id, content_hash FROM pages WHERE url = %s", (data["url"],))

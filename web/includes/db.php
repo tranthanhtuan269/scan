@@ -37,3 +37,11 @@ function db_scalar(string $sql, array $params = []): mixed
     $stmt->execute($params);
     return $stmt->fetchColumn();
 }
+
+function db_execute(string $sql, array $params = []): int
+{
+    $stmt = db()->prepare($sql);
+    $stmt->execute($params);
+
+    return $stmt->rowCount();
+}

@@ -17,6 +17,7 @@ RewriteRule ^stores/?$ stores.php [L,QSA]
 RewriteRule ^search/?$ search.php [L,QSA]
 
 RewriteRule ^api/?$ api/index.php [L,QSA]
+RewriteRule ^api/coupons/import/?$ api/import-coupons.php [L,QSA]
 RewriteRule ^api/coupons/?$ api/coupons.php [L,QSA]
 RewriteRule ^api/search/?$ api/search.php [L,QSA]
 RewriteRule ^api/store/([a-zA-Z0-9._-]+)/?$ api/store.php?slug=$1 [L,QSA]

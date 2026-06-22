@@ -36,4 +36,20 @@ define('SITE_TAGLINE', 'Leading Coupons & Deals Marketplace');
 define('PER_PAGE', 24);
 define('STORES_PER_PAGE', 48);
 
+// AI fallback khi store chưa có trong DB
+// Gemini (ưu tiên khi GEMINI_ENABLED=true) hoặc OpenAI-compatible (API_AI)
+define('GEMINI_ENABLED', filter_var($_ENV['GEMINI_ENABLED'] ?? 'false', FILTER_VALIDATE_BOOLEAN));
+define('GEMINI_API_KEY', $_ENV['GEMINI_API_KEY'] ?? '');
+define('GEMINI_MODEL', $_ENV['GEMINI_MODEL'] ?? 'gemini-2.5-flash');
+define('GEMINI_TIMEOUT', max(10, min(300, (int) ($_ENV['GEMINI_TIMEOUT'] ?? 90))));
+define('GEMINI_API_BASE', rtrim($_ENV['GEMINI_API_BASE'] ?? 'https://generativelanguage.googleapis.com/v1beta', '/'));
+
+define('API_AI', $_ENV['API_AI'] ?? 'https://api.openai.com/v1/chat/completions');
+define('API_AI_KEY', $_ENV['API_AI_KEY'] ?? ($_ENV['OPENAI_API_KEY'] ?? ''));
+define('API_AI_MODEL', $_ENV['API_AI_MODEL'] ?? ($_ENV['OPENAI_MODEL'] ?? 'gpt-4o-mini'));
+define('API_AI_ENABLED', filter_var($_ENV['API_AI_ENABLED'] ?? '1', FILTER_VALIDATE_BOOLEAN));
+define('API_AI_MAX_OFFERS', max(1, min(50, (int) ($_ENV['API_AI_MAX_OFFERS'] ?? 10))));
+define('AFFILIATE_PARAM', $_ENV['AFFILIATE_PARAM'] ?? '');
+define('AFFILIATE_BASE_URL', $_ENV['AFFILIATE_BASE_URL'] ?? '');
+
 date_default_timezone_set('Asia/Ho_Chi_Minh');

@@ -255,6 +255,28 @@ Response mẫu:
 
 Params: `page`, `limit` (max 200)
 
+**AI fallback** (khi store chưa có trong DB): tự gọi AI → import → trả coupon.
+
+**Gemini** (ưu tiên khi `GEMINI_ENABLED=true`):
+
+| Biến | Mô tả |
+|------|--------|
+| `GEMINI_ENABLED` | `true` bật Gemini |
+| `GEMINI_API_KEY` | Google AI API key |
+| `GEMINI_MODEL` | vd `gemini-2.5-flash` |
+| `GEMINI_TIMEOUT` | Timeout giây (mặc định 90) |
+
+**OpenAI-compatible** (khi `GEMINI_ENABLED=false`):
+
+| Biến | Mô tả |
+|------|--------|
+| `API_AI` | URL chat completions |
+| `API_AI_KEY` | API key |
+
+Query: `?api_ai=URL` override endpoint | `?gemini_model=model` override model | `?ai=0` tắt fallback
+
+Log: `logs/api-ai.log`
+
 ### Quản lý site được phép gọi API
 
 Bảng `sitename` — chỉ site có trong bảng mới nhận được dữ liệu:

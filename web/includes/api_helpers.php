@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/helpers.php';
+require_once __DIR__ . '/ai_helpers.php';
 
 function api_json(mixed $data, int $status = 200): never
 {

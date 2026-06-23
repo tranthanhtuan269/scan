@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     affiliate_url VARCHAR(512) NULL,
     button_text VARCHAR(50) NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
+    coupon_month CHAR(7) NULL COMMENT 'YYYY-MM — coupon valid for this month only',
     first_seen_at DATETIME NOT NULL,
     last_seen_at DATETIME NOT NULL,
     last_changed_at DATETIME NOT NULL,
@@ -69,6 +70,16 @@ CREATE TABLE IF NOT EXISTS coupons (
     KEY idx_coupons_store_status (store_id, status),
     KEY idx_coupons_offer (offer_id),
     CONSTRAINT fk_coupons_store FOREIGN KEY (store_id) REFERENCES stores(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS store_monthly_ai_refresh (
+    lookup_key VARCHAR(255) NOT NULL,
+    month CHAR(7) NOT NULL COMMENT 'YYYY-MM',
+    attempted_at DATETIME NOT NULL,
+    imported TINYINT(1) NOT NULL DEFAULT 0,
+    provider VARCHAR(32) NULL,
+    PRIMARY KEY (lookup_key, month),
+    KEY idx_monthly_ai_month (month)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS pages (

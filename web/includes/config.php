@@ -52,4 +52,7 @@ define('API_AI_MAX_OFFERS', max(1, min(50, (int) ($_ENV['API_AI_MAX_OFFERS'] ?? 
 define('AFFILIATE_PARAM', $_ENV['AFFILIATE_PARAM'] ?? '');
 define('AFFILIATE_BASE_URL', $_ENV['AFFILIATE_BASE_URL'] ?? '');
 
+// false = POST import từ site client trả success giả, không ghi DB (chỉ AI nội bộ được import)
+define('API_IMPORT_EXTERNAL_ENABLED', filter_var($_ENV['API_IMPORT_EXTERNAL_ENABLED'] ?? 'false', FILTER_VALIDATE_BOOLEAN));
+
 date_default_timezone_set('Asia/Ho_Chi_Minh');

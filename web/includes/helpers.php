@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/db.php';
+require_once __DIR__ . '/coupon_monthly.php';
 require_once __DIR__ . '/404.php';
 
 function e(?string $value): string
@@ -417,12 +418,10 @@ function api_normalize_lookup_key(string $store): string
 
 function api_count_store_api_coupons(int $storeId): int
 {
+    $where = coupon_monthly_active_where('c');
+
     return (int) db_scalar(
-        "SELECT COUNT(*) FROM coupons c
-         WHERE c.store_id = ?
-           AND c.status = 'active'
-           AND c.affiliate_url IS NOT NULL
-           AND c.affiliate_url != ''",
+        "SELECT COUNT(*) FROM coupons c WHERE c.store_id = ? AND {$where}",
         [$storeId]
     );
 }
@@ -441,9 +440,7 @@ function api_pick_best_store_from_ids(array $storeIds): ?array
             (
                 SELECT COUNT(*) FROM coupons c
                 WHERE c.store_id = s.id
-                  AND c.status = 'active'
-                  AND c.affiliate_url IS NOT NULL
-                  AND c.affiliate_url != ''
+                  AND " . coupon_monthly_active_where('c') . "
             ) AS coupon_count
          FROM stores s
          WHERE s.is_active = 1
@@ -490,9 +487,7 @@ function api_find_store_by_search_slow(string $store): ?array
         OR EXISTS (
             SELECT 1 FROM coupons cx
             WHERE cx.store_id = s.id
-              AND cx.status = \'active\'
-              AND cx.affiliate_url IS NOT NULL
-              AND cx.affiliate_url != \'\'
+              AND ' . coupon_monthly_active_where('cx') . '
               AND cx.affiliate_url LIKE ?
         ))';
 
@@ -566,10 +561,8 @@ function api_rebuild_single_lookup_key(string $lookupKey): void
             "SELECT DISTINCT c.store_id
              FROM coupons c
              INNER JOIN stores s ON s.id = c.store_id
-             WHERE c.status = 'active'
+             WHERE " . coupon_monthly_active_where('c') . "
                AND s.is_active = 1
-               AND c.affiliate_url IS NOT NULL
-               AND c.affiliate_url != ''
                AND LOWER(TRIM(LEADING 'www.' FROM SUBSTRING_INDEX(
                    SUBSTRING_INDEX(SUBSTRING_INDEX(c.affiliate_url, '?', 1), '://', -1),
                    '/',
@@ -822,6 +815,7 @@ function api_resolve_import_store(array $payload): array
 function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 'replace'): array
 {
     $ts = date('Y-m-d H:i:s');
+    $month = coupon_current_month();
     $seenFingerprints = [];
     $inserted = 0;
     $updated = 0;
@@ -841,7 +835,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     offer_id = ?, coupon_type = ?, is_verified = ?,
                     discount_label = ?, title = ?, description = ?,
                     coupon_code = ?, offer_url = ?, affiliate_url = ?,
-                    button_text = ?, status = \'active\',
+                    button_text = ?, status = \'active\', coupon_month = ?,
                     last_seen_at = ?, last_changed_at = ?
                  WHERE id = ?',
                 [
@@ -855,6 +849,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     $coupon['offer_url'],
                     $coupon['affiliate_url'],
                     $coupon['button_text'],
+                    $month,
                     $ts,
                     $ts,
                     (int) $existing['id'],
@@ -866,9 +861,9 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                 'INSERT INTO coupons (
                     store_id, offer_id, fingerprint, coupon_type, is_verified,
                     discount_label, title, description, coupon_code,
-                    offer_url, affiliate_url, button_text, status,
+                    offer_url, affiliate_url, button_text, status, coupon_month,
                     first_seen_at, last_seen_at, last_changed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'active\', ?, ?, ?)',
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'active\', ?, ?, ?, ?)',
                 [
                     $storeId,
                     $coupon['offer_id'],
@@ -882,6 +877,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     $coupon['offer_url'],
                     $coupon['affiliate_url'],
                     $coupon['button_text'],
+                    $month,
                     $ts,
                     $ts,
                     $ts,
@@ -897,14 +893,15 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
             $placeholders = implode(',', array_fill(0, count($seenFingerprints), '?'));
             $expired = db_execute(
                 "UPDATE coupons SET status = 'expired', last_changed_at = ?
-                 WHERE store_id = ? AND status = 'active' AND fingerprint NOT IN ({$placeholders})",
-                array_merge([$ts, $storeId], $seenFingerprints)
+                 WHERE store_id = ? AND status = 'active' AND coupon_month = ?
+                   AND fingerprint NOT IN ({$placeholders})",
+                array_merge([$ts, $storeId, $month], $seenFingerprints)
             );
         } else {
             $expired = db_execute(
                 "UPDATE coupons SET status = 'expired', last_changed_at = ?
-                 WHERE store_id = ? AND status = 'active'",
-                [$ts, $storeId]
+                 WHERE store_id = ? AND status = 'active' AND coupon_month = ?",
+                [$ts, $storeId, $month]
             );
         }
     }
@@ -928,11 +925,12 @@ function dedupe_store_coupons_by_label(int $storeId): int
              FROM coupons c
              WHERE c.store_id = ?
                AND c.status = 'active'
+               AND c.coupon_month = ?
                AND c.discount_label IS NOT NULL
                AND TRIM(c.discount_label) != ''
          ) ranked
          WHERE ranked.rn > 1",
-        [$storeId]
+        [$storeId, coupon_current_month()]
     );
 
     if ($losers === []) {

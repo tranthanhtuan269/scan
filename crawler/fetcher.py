@@ -69,3 +69,15 @@ class Fetcher:
         except httpx.HTTPError as exc:
             self._last_request_at = time.monotonic()
             return FetchResult(url=url, status_code=0, text="", error=str(exc))
+
+    def fetch_final_url(self, url: str) -> str | None:
+        """Follow redirects and return the final URL (for affiliate /go links)."""
+        self._throttle()
+        try:
+            response = self.client.get(url, follow_redirects=True)
+            self._last_request_at = time.monotonic()
+            if response.status_code < 400:
+                return str(response.url)
+        except httpx.HTTPError:
+            self._last_request_at = time.monotonic()
+        return None

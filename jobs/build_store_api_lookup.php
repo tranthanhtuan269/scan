@@ -46,8 +46,10 @@ $couponHosts = db_fetch_all(
         ))) AS host
      FROM coupons c
      INNER JOIN stores s ON s.id = c.store_id
-     WHERE " . coupon_monthly_active_where('c') . "
-       AND s.is_active = 1"
+     WHERE c.status = 'active'
+       AND s.is_active = 1
+       AND c.affiliate_url IS NOT NULL
+       AND c.affiliate_url != ''"
 );
 
 foreach ($couponHosts as $row) {

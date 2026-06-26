@@ -10,10 +10,6 @@ def now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-def current_month() -> str:
-    return datetime.now().strftime("%Y-%m")
-
-
 class Repository:
     def __init__(self):
         self.conn = get_connection()
@@ -272,7 +268,6 @@ class Repository:
 
     def sync_coupons(self, store_id: int, coupons: list[dict]) -> tuple[int, int]:
         ts = now()
-        month = current_month()
         seen_fingerprints: set[str] = set()
         inserted = 0
         updated = 0
@@ -291,7 +286,7 @@ class Repository:
                         offer_id = %s, coupon_type = %s, is_verified = %s,
                         discount_label = %s, title = %s, description = %s,
                         coupon_code = %s, offer_url = %s, affiliate_url = %s,
-                        button_text = %s, status = 'active', coupon_month = %s,
+                        button_text = %s, status = 'active',
                         last_seen_at = %s,
                         last_changed_at = %s
                     WHERE id = %s
@@ -307,7 +302,6 @@ class Repository:
                         coupon.get("offer_url"),
                         coupon.get("affiliate_url"),
                         coupon.get("button_text"),
-                        month,
                         ts,
                         ts,
                         existing["id"],
@@ -320,9 +314,9 @@ class Repository:
                     INSERT INTO coupons (
                         store_id, offer_id, fingerprint, coupon_type, is_verified,
                         discount_label, title, description, coupon_code,
-                        offer_url, affiliate_url, button_text, status, coupon_month,
+                        offer_url, affiliate_url, button_text, status,
                         first_seen_at, last_seen_at, last_changed_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s, %s)
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', %s, %s, %s)
                     """,
                     (
                         store_id,
@@ -337,7 +331,6 @@ class Repository:
                         coupon.get("offer_url"),
                         coupon.get("affiliate_url"),
                         coupon.get("button_text"),
-                        month,
                         ts,
                         ts,
                         ts,
@@ -350,18 +343,17 @@ class Repository:
             self.execute(
                 f"""
                 UPDATE coupons SET status = 'expired', last_changed_at = %s
-                WHERE store_id = %s AND status = 'active' AND coupon_month = %s
-                  AND fingerprint NOT IN ({placeholders})
+                WHERE store_id = %s AND status = 'active' AND fingerprint NOT IN ({placeholders})
                 """,
-                (ts, store_id, month, *seen_fingerprints),
+                (ts, store_id, *seen_fingerprints),
             )
         else:
             self.execute(
                 """
                 UPDATE coupons SET status = 'expired', last_changed_at = %s
-                WHERE store_id = %s AND status = 'active' AND coupon_month = %s
+                WHERE store_id = %s AND status = 'active'
                 """,
-                (ts, store_id, month),
+                (ts, store_id),
             )
 
         self.commit()

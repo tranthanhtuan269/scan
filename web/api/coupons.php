@@ -27,7 +27,6 @@ $aiMeta = null;
 if ($result['total'] === 0) {
     $aiMeta = api_ai_fetch_and_import_store($store, $site['name']);
     if ($aiMeta !== null && !empty($aiMeta['imported'])) {
-        coupon_monthly_expire_stale();
         $result = api_find_coupons_by_store($store, $limit, $offset);
     }
 }

@@ -409,7 +409,7 @@ function api_normalize_lookup_key(string $store): string
     $key = preg_replace('#^https?://#i', '', $key);
     $key = preg_replace('#^www\.#i', '', $key);
 
-    if (preg_match('#^([^/?#]+)#', $key, $matches)) {
+    if (preg_match('~^([^/?#]+)~', $key, $matches)) {
         return $matches[1];
     }
 
@@ -418,7 +418,7 @@ function api_normalize_lookup_key(string $store): string
 
 function api_count_store_api_coupons(int $storeId): int
 {
-    $where = coupon_monthly_active_where('c');
+    $where = coupon_api_active_where('c');
 
     return (int) db_scalar(
         "SELECT COUNT(*) FROM coupons c WHERE c.store_id = ? AND {$where}",
@@ -440,7 +440,7 @@ function api_pick_best_store_from_ids(array $storeIds): ?array
             (
                 SELECT COUNT(*) FROM coupons c
                 WHERE c.store_id = s.id
-                  AND " . coupon_monthly_active_where('c') . "
+                  AND " . coupon_api_active_where('c') . "
             ) AS coupon_count
          FROM stores s
          WHERE s.is_active = 1
@@ -466,11 +466,74 @@ function api_save_store_lookup(string $lookupKey, int $storeId, int $couponCount
         'INSERT INTO store_api_lookup (lookup_key, store_id, coupon_count, updated_at)
          VALUES (?, ?, ?, NOW())
          ON DUPLICATE KEY UPDATE
-            store_id = VALUES(store_id),
-            coupon_count = VALUES(coupon_count),
+            store_id = IF(VALUES(coupon_count) > coupon_count, VALUES(store_id), store_id),
+            coupon_count = GREATEST(coupon_count, VALUES(coupon_count)),
             updated_at = NOW()',
         [$lookupKey, $storeId, $couponCount]
     );
+}
+
+/** @return list<int> */
+function api_collect_store_ids_for_lookup_key(string $lookupKey): array
+{
+    $lookupKey = strtolower(trim($lookupKey));
+    if ($lookupKey === '') {
+        return [];
+    }
+
+    $storeIds = [];
+
+    if (str_contains($lookupKey, '.')) {
+        $stores = db_fetch_all(
+            'SELECT id, affiliate_url FROM stores WHERE is_active = 1 AND affiliate_url IS NOT NULL AND affiliate_url != \'\''
+        );
+        foreach ($stores as $store) {
+            if (merchant_host_from_url($store['affiliate_url'] ?? null) === $lookupKey) {
+                $storeIds[] = (int) $store['id'];
+            }
+        }
+
+        $couponStores = db_fetch_all(
+            "SELECT DISTINCT c.store_id
+             FROM coupons c
+             INNER JOIN stores s ON s.id = c.store_id
+             WHERE " . coupon_api_active_where('c') . "
+               AND s.is_active = 1
+               AND LOWER(TRIM(LEADING 'www.' FROM SUBSTRING_INDEX(
+                   SUBSTRING_INDEX(SUBSTRING_INDEX(c.affiliate_url, '?', 1), '://', -1),
+                   '/',
+                   1
+               ))) = ?",
+            [$lookupKey]
+        );
+        foreach ($couponStores as $row) {
+            $storeIds[] = (int) $row['store_id'];
+        }
+    } else {
+        $slugCandidates = array_values(array_unique([
+            $lookupKey,
+            'gch-' . $lookupKey,
+            'vr-' . $lookupKey,
+        ]));
+        $placeholders = implode(',', array_fill(0, count($slugCandidates), '?'));
+        $stores = db_fetch_all(
+            "SELECT id FROM stores WHERE is_active = 1 AND (
+                LOWER(slug) IN ({$placeholders}) OR LOWER(name) = ?
+            )",
+            [...$slugCandidates, $lookupKey]
+        );
+        foreach ($stores as $store) {
+            $storeIds[] = (int) $store['id'];
+        }
+    }
+
+    return array_values(array_unique(array_filter($storeIds)));
+}
+
+/** @return array{store_id: int, coupon_count: int}|null */
+function api_resolve_best_for_lookup_key(string $lookupKey): ?array
+{
+    return api_pick_best_store_from_ids(api_collect_store_ids_for_lookup_key($lookupKey));
 }
 
 /** @return array{store_id: int, coupon_count: int}|null */
@@ -487,7 +550,7 @@ function api_find_store_by_search_slow(string $store): ?array
         OR EXISTS (
             SELECT 1 FROM coupons cx
             WHERE cx.store_id = s.id
-              AND ' . coupon_monthly_active_where('cx') . '
+              AND ' . coupon_api_active_where('cx') . '
               AND cx.affiliate_url LIKE ?
         ))';
 
@@ -510,26 +573,16 @@ function api_find_store_by_search_slow(string $store): ?array
 function api_resolve_store_for_search(string $store): ?array
 {
     $lookupKey = api_normalize_lookup_key($store);
-    $cached = db_fetch(
-        'SELECT store_id, coupon_count FROM store_api_lookup WHERE lookup_key = ?',
-        [$lookupKey]
-    );
 
-    if ($cached) {
-        $active = db_fetch(
-            'SELECT id FROM stores WHERE id = ? AND is_active = 1',
-            [(int) $cached['store_id']]
-        );
-        if ($active) {
-            return [
-                'store_id' => (int) $cached['store_id'],
-                'coupon_count' => (int) $cached['coupon_count'],
-            ];
-        }
+    $winner = api_resolve_best_for_lookup_key($lookupKey);
+    if ($winner !== null) {
+        api_save_store_lookup($lookupKey, $winner['store_id'], $winner['coupon_count']);
+
+        return $winner;
     }
 
     $resolved = api_find_store_by_search_slow($store);
-    if (!$resolved) {
+    if ($resolved === null) {
         return null;
     }
 
@@ -545,45 +598,7 @@ function api_rebuild_single_lookup_key(string $lookupKey): void
         return;
     }
 
-    $storeIds = [];
-
-    if (str_contains($lookupKey, '.')) {
-        $stores = db_fetch_all(
-            'SELECT id, affiliate_url FROM stores WHERE is_active = 1 AND affiliate_url IS NOT NULL AND affiliate_url != \'\''
-        );
-        foreach ($stores as $store) {
-            if (merchant_host_from_url($store['affiliate_url'] ?? null) === $lookupKey) {
-                $storeIds[] = (int) $store['id'];
-            }
-        }
-
-        $couponStores = db_fetch_all(
-            "SELECT DISTINCT c.store_id
-             FROM coupons c
-             INNER JOIN stores s ON s.id = c.store_id
-             WHERE " . coupon_monthly_active_where('c') . "
-               AND s.is_active = 1
-               AND LOWER(TRIM(LEADING 'www.' FROM SUBSTRING_INDEX(
-                   SUBSTRING_INDEX(SUBSTRING_INDEX(c.affiliate_url, '?', 1), '://', -1),
-                   '/',
-                   1
-               ))) = ?",
-            [$lookupKey]
-        );
-        foreach ($couponStores as $row) {
-            $storeIds[] = (int) $row['store_id'];
-        }
-    } else {
-        $stores = db_fetch_all(
-            'SELECT id FROM stores WHERE is_active = 1 AND (LOWER(slug) = ? OR LOWER(name) = ?)',
-            [$lookupKey, $lookupKey]
-        );
-        foreach ($stores as $store) {
-            $storeIds[] = (int) $store['id'];
-        }
-    }
-
-    $winner = api_pick_best_store_from_ids($storeIds);
+    $winner = api_resolve_best_for_lookup_key($lookupKey);
     if ($winner === null) {
         db_execute('DELETE FROM store_api_lookup WHERE lookup_key = ?', [$lookupKey]);
 
@@ -815,7 +830,6 @@ function api_resolve_import_store(array $payload): array
 function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 'replace'): array
 {
     $ts = date('Y-m-d H:i:s');
-    $month = coupon_current_month();
     $seenFingerprints = [];
     $inserted = 0;
     $updated = 0;
@@ -835,7 +849,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     offer_id = ?, coupon_type = ?, is_verified = ?,
                     discount_label = ?, title = ?, description = ?,
                     coupon_code = ?, offer_url = ?, affiliate_url = ?,
-                    button_text = ?, status = \'active\', coupon_month = ?,
+                    button_text = ?, status = \'active\',
                     last_seen_at = ?, last_changed_at = ?
                  WHERE id = ?',
                 [
@@ -849,7 +863,6 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     $coupon['offer_url'],
                     $coupon['affiliate_url'],
                     $coupon['button_text'],
-                    $month,
                     $ts,
                     $ts,
                     (int) $existing['id'],
@@ -861,9 +874,9 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                 'INSERT INTO coupons (
                     store_id, offer_id, fingerprint, coupon_type, is_verified,
                     discount_label, title, description, coupon_code,
-                    offer_url, affiliate_url, button_text, status, coupon_month,
+                    offer_url, affiliate_url, button_text, status,
                     first_seen_at, last_seen_at, last_changed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'active\', ?, ?, ?, ?)',
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'active\', ?, ?, ?)',
                 [
                     $storeId,
                     $coupon['offer_id'],
@@ -877,7 +890,6 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     $coupon['offer_url'],
                     $coupon['affiliate_url'],
                     $coupon['button_text'],
-                    $month,
                     $ts,
                     $ts,
                     $ts,
@@ -893,15 +905,14 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
             $placeholders = implode(',', array_fill(0, count($seenFingerprints), '?'));
             $expired = db_execute(
                 "UPDATE coupons SET status = 'expired', last_changed_at = ?
-                 WHERE store_id = ? AND status = 'active' AND coupon_month = ?
-                   AND fingerprint NOT IN ({$placeholders})",
-                array_merge([$ts, $storeId, $month], $seenFingerprints)
+                 WHERE store_id = ? AND status = 'active' AND fingerprint NOT IN ({$placeholders})",
+                array_merge([$ts, $storeId], $seenFingerprints)
             );
         } else {
             $expired = db_execute(
                 "UPDATE coupons SET status = 'expired', last_changed_at = ?
-                 WHERE store_id = ? AND status = 'active' AND coupon_month = ?",
-                [$ts, $storeId, $month]
+                 WHERE store_id = ? AND status = 'active'",
+                [$ts, $storeId]
             );
         }
     }
@@ -925,12 +936,11 @@ function dedupe_store_coupons_by_label(int $storeId): int
              FROM coupons c
              WHERE c.store_id = ?
                AND c.status = 'active'
-               AND c.coupon_month = ?
                AND c.discount_label IS NOT NULL
                AND TRIM(c.discount_label) != ''
          ) ranked
          WHERE ranked.rn > 1",
-        [$storeId, coupon_current_month()]
+        [$storeId]
     );
 
     if ($losers === []) {

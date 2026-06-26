@@ -241,7 +241,6 @@ function api_parse_pagination(int $defaultLimit = 20, int $maxLimit = 100): arra
 function api_find_coupons_by_store(string $store, int $limit = 100, int $offset = 0): array
 {
     $store = trim($store);
-    coupon_monthly_expire_stale();
     $resolved = api_resolve_store_for_search($store);
 
     if ($resolved === null) {
@@ -253,7 +252,7 @@ function api_find_coupons_by_store(string $store, int $limit = 100, int $offset 
     }
 
     $storeId = $resolved['store_id'];
-    $activeWhere = coupon_monthly_active_where('c');
+    $activeWhere = coupon_api_active_where('c');
     $total = (int) db_scalar(
         "SELECT COUNT(*) FROM coupons c WHERE c.store_id = ? AND {$activeWhere}",
         [$storeId]
@@ -324,18 +323,10 @@ function api_read_json_body(): array
 
 /**
  * @param array<string, mixed> $payload
- * @param array{internal?: bool} $options
  * @return array<string, mixed>
  */
-function api_import_coupons(array $payload, array $options = []): array
+function api_import_coupons(array $payload): array
 {
-    $internal = !empty($options['internal']);
-    $siteName = (string) ($_GET['site'] ?? '');
-
-    if (!$internal && !api_site_can_import($siteName)) {
-        return api_import_coupons_fake_success($payload);
-    }
-
     api_import_log('import_start', [
         'site' => $_GET['site'] ?? null,
         'store_keys' => array_keys(is_array($payload['store'] ?? null) ? $payload['store'] : []),
@@ -403,39 +394,4 @@ function api_import_coupons(array $payload, array $options = []): array
     ]);
 
     return $result;
-}
-
-/**
- * @param array<string, mixed> $payload
- * @return array<string, mixed>
- */
-function api_import_coupons_fake_success(array $payload): array
-{
-    $storeInfo = is_array($payload['store'] ?? null) ? $payload['store'] : [];
-    $couponCount = is_array($payload['coupons'] ?? null) ? count($payload['coupons']) : 0;
-    $syncMode = strtolower(trim((string) ($payload['sync_mode'] ?? 'replace')));
-
-    api_import_log('import_blocked_fake_success', [
-        'site' => $_GET['site'] ?? null,
-        'coupon_count' => $couponCount,
-        'store_slug' => $storeInfo['slug'] ?? null,
-    ]);
-
-    return [
-        'request_id' => api_import_request_id(),
-        'store' => [
-            'id' => isset($storeInfo['store_id']) ? (int) $storeInfo['store_id'] : 0,
-            'slug' => (string) ($storeInfo['slug'] ?? ''),
-            'name' => (string) ($storeInfo['name'] ?? ''),
-        ],
-        'sync_mode' => in_array($syncMode, ['replace', 'append'], true) ? $syncMode : 'replace',
-        'stats' => [
-            'received' => $couponCount,
-            'inserted' => $couponCount,
-            'updated' => 0,
-            'expired' => 0,
-            'deduped_by_label' => 0,
-            'active_coupons' => $couponCount,
-        ],
-    ];
 }

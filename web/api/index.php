@@ -6,18 +6,11 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 api_json([
     'success' => true,
     'name' => 'CouponSpeak Local API',
-    'version' => '1.3',
+    'version' => '1.4',
     'auth' => [
         'type' => 'site_whitelist',
         'param' => 'site',
         'description' => 'All data endpoints require ?site=... registered in sitename table.',
-    ],
-    'monthly_cycle' => [
-        'description' => 'Coupons are valid for the current calendar month only (coupon_month).',
-        'ai_refresh' => 'First GET request per store per month with no active coupons triggers AI import.',
-        'external_import' => API_IMPORT_EXTERNAL_ENABLED
-            ? 'POST import from client sites is enabled.'
-            : 'POST import from client sites returns success without writing to DB.',
     ],
     'registered_sites' => array_map(
         static fn(array $row): array => [

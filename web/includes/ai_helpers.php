@@ -99,6 +99,10 @@ function api_ai_resolve_gemini_endpoint(): ?string
 
 function api_ai_is_available(): bool
 {
+    if (!API_AI_FALLBACK_ENABLED) {
+        return false;
+    }
+
     if (api_ai_request_disabled()) {
         return false;
     }
@@ -570,23 +574,6 @@ function api_ai_fetch_and_import_store(string $storeQuery, string $siteName): ?a
         return null;
     }
 
-    $lookupKey = api_normalize_lookup_key($storeQuery);
-    $month = coupon_current_month();
-    $provider = api_ai_uses_gemini() ? 'gemini' : 'openai';
-
-    if (!coupon_monthly_ai_reserve($lookupKey)) {
-        return [
-            'attempted' => false,
-            'skipped' => true,
-            'reason' => 'AI refresh already attempted this month',
-            'month' => $month,
-            'provider' => $provider,
-        ];
-    }
-
-    $imported = false;
-    $resultMeta = null;
-
     try {
         $payload = api_ai_call($storeQuery);
     } catch (Throwable $e) {
@@ -595,45 +582,33 @@ function api_ai_fetch_and_import_store(string $storeQuery, string $siteName): ?a
             'error' => $e->getMessage(),
         ]);
 
-        $resultMeta = [
+        return [
             'attempted' => true,
             'imported' => false,
-            'provider' => $provider,
+            'provider' => api_ai_uses_gemini() ? 'gemini' : 'openai',
             'error' => $e->getMessage(),
-            'month' => $month,
         ];
-        coupon_monthly_ai_finalize($lookupKey, false, $provider);
-
-        return $resultMeta;
     }
 
     if ($payload === null) {
         $lastError = api_ai_last_error();
 
-        $resultMeta = [
+        return [
             'attempted' => true,
             'imported' => false,
-            'provider' => $provider,
+            'provider' => api_ai_uses_gemini() ? 'gemini' : 'openai',
             'error' => $lastError ?? 'AI request failed',
-            'month' => $month,
         ];
-        coupon_monthly_ai_finalize($lookupKey, false, $provider);
-
-        return $resultMeta;
     }
 
     $coupons = $payload['coupons'] ?? [];
     if (!is_array($coupons) || $coupons === []) {
-        $resultMeta = [
+        return [
             'attempted' => true,
             'imported' => false,
-            'provider' => $provider,
+            'provider' => api_ai_uses_gemini() ? 'gemini' : 'openai',
             'error' => 'AI returned no coupons',
-            'month' => $month,
         ];
-        coupon_monthly_ai_finalize($lookupKey, false, $provider);
-
-        return $resultMeta;
     }
 
     if (!isset($payload['sync_mode'])) {
@@ -643,38 +618,30 @@ function api_ai_fetch_and_import_store(string $storeQuery, string $siteName): ?a
     try {
         $prevSite = $_GET['site'] ?? null;
         $_GET['site'] = $siteName;
-        $importResult = api_import_coupons($payload, ['internal' => true]);
+        $importResult = api_import_coupons($payload);
         if ($prevSite === null) {
             unset($_GET['site']);
         } else {
             $_GET['site'] = $prevSite;
         }
-        $imported = true;
     } catch (Throwable $e) {
         api_ai_log('import_failed', [
             'store' => $storeQuery,
             'error' => $e->getMessage(),
         ]);
 
-        $resultMeta = [
+        return [
             'attempted' => true,
             'imported' => false,
-            'provider' => $provider,
+            'provider' => api_ai_uses_gemini() ? 'gemini' : 'openai',
             'error' => 'Import failed: ' . $e->getMessage(),
-            'month' => $month,
         ];
-        coupon_monthly_ai_finalize($lookupKey, false, $provider);
-
-        return $resultMeta;
     }
-
-    coupon_monthly_ai_finalize($lookupKey, true, $provider);
 
     return [
         'attempted' => true,
         'imported' => true,
-        'provider' => $provider,
-        'month' => $month,
+        'provider' => api_ai_uses_gemini() ? 'gemini' : 'openai',
         'import' => $importResult,
     ];
 }

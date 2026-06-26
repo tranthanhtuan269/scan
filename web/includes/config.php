@@ -48,11 +48,10 @@ define('API_AI', $_ENV['API_AI'] ?? 'https://api.openai.com/v1/chat/completions'
 define('API_AI_KEY', $_ENV['API_AI_KEY'] ?? ($_ENV['OPENAI_API_KEY'] ?? ''));
 define('API_AI_MODEL', $_ENV['API_AI_MODEL'] ?? ($_ENV['OPENAI_MODEL'] ?? 'gpt-4o-mini'));
 define('API_AI_ENABLED', filter_var($_ENV['API_AI_ENABLED'] ?? '1', FILTER_VALIDATE_BOOLEAN));
+// Tạm tắt: API_AI_FALLBACK_ENABLED=false trong .env
+define('API_AI_FALLBACK_ENABLED', filter_var($_ENV['API_AI_FALLBACK_ENABLED'] ?? 'true', FILTER_VALIDATE_BOOLEAN));
 define('API_AI_MAX_OFFERS', max(1, min(50, (int) ($_ENV['API_AI_MAX_OFFERS'] ?? 10))));
 define('AFFILIATE_PARAM', $_ENV['AFFILIATE_PARAM'] ?? '');
 define('AFFILIATE_BASE_URL', $_ENV['AFFILIATE_BASE_URL'] ?? '');
-
-// false = POST import từ site client trả success giả, không ghi DB (chỉ AI nội bộ được import)
-define('API_IMPORT_EXTERNAL_ENABLED', filter_var($_ENV['API_IMPORT_EXTERNAL_ENABLED'] ?? 'false', FILTER_VALIDATE_BOOLEAN));
 
 date_default_timezone_set('Asia/Ho_Chi_Minh');

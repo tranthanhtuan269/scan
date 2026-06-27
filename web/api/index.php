@@ -6,7 +6,7 @@ require_once __DIR__ . '/../includes/api_helpers.php';
 api_json([
     'success' => true,
     'name' => 'CouponSpeak Local API',
-    'version' => '1.4',
+    'version' => '1.5',
     'auth' => [
         'type' => 'site_whitelist',
         'param' => 'site',
@@ -32,8 +32,9 @@ api_json([
                 'api_ai' => 'Optional: override AI endpoint URL (Gemini generateContent or OpenAI chat/completions)',
                 'gemini_model' => 'Optional: override Gemini model when GEMINI_ENABLED=true',
                 'ai' => 'Set 0 to disable AI fallback when store not in DB',
+                'profile' => 'Set 1 to include cached store_profile (logo, meta, detect payload) when store exists in DB',
             ],
-            'response_fields' => ['discount_label', 'title', 'coupon_code', 'coupon_type'],
+            'response_fields' => ['discount_label', 'title', 'coupon_code', 'coupon_type', 'expires_at', 'store_profile (when profile=1)'],
             'example' => url('api/coupons') . '?site=thuoc360&store=alsoasked',
         ],
         [
@@ -49,7 +50,7 @@ api_json([
             'params' => [
                 'site' => 'Registered site name (required query param)',
             ],
-            'body' => 'JSON — see GET /api/coupons/import for sample',
+            'body' => 'JSON — see GET /api/coupons/import for sample. Optional store.website, store.logo_url, store.meta_description, store.category_name, store.category_id, detect.generated_blog for detect cache.',
             'example' => url('api/coupons/import') . '?site=thuoc360',
         ],
         [

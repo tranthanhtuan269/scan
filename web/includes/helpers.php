@@ -659,6 +659,17 @@ function coupon_fingerprint(
     return hash('sha256', $base);
 }
 
+function api_parse_import_expires_at(mixed $value): ?string
+{
+    if ($value === null || $value === '') {
+        return null;
+    }
+
+    $ts = strtotime((string) $value);
+
+    return $ts !== false ? date('Y-m-d H:i:s', $ts) : null;
+}
+
 /** @return array<string, mixed> */
 function api_normalize_import_coupon(array $raw, int $index): array
 {
@@ -707,6 +718,7 @@ function api_normalize_import_coupon(array $raw, int $index): array
         'button_text' => isset($raw['button_text']) && $raw['button_text'] !== ''
             ? trim((string) $raw['button_text'])
             : null,
+        'expires_at' => api_parse_import_expires_at($raw['expires_at'] ?? null),
     ];
 }
 
@@ -849,7 +861,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     offer_id = ?, coupon_type = ?, is_verified = ?,
                     discount_label = ?, title = ?, description = ?,
                     coupon_code = ?, offer_url = ?, affiliate_url = ?,
-                    button_text = ?, status = \'active\',
+                    button_text = ?, expires_at = ?, status = \'active\',
                     last_seen_at = ?, last_changed_at = ?
                  WHERE id = ?',
                 [
@@ -863,6 +875,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     $coupon['offer_url'],
                     $coupon['affiliate_url'],
                     $coupon['button_text'],
+                    $coupon['expires_at'],
                     $ts,
                     $ts,
                     (int) $existing['id'],
@@ -874,9 +887,9 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                 'INSERT INTO coupons (
                     store_id, offer_id, fingerprint, coupon_type, is_verified,
                     discount_label, title, description, coupon_code,
-                    offer_url, affiliate_url, button_text, status,
+                    offer_url, affiliate_url, button_text, expires_at, status,
                     first_seen_at, last_seen_at, last_changed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'active\', ?, ?, ?)',
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'active\', ?, ?, ?)',
                 [
                     $storeId,
                     $coupon['offer_id'],
@@ -890,6 +903,7 @@ function sync_store_coupons(int $storeId, array $coupons, string $syncMode = 're
                     $coupon['offer_url'],
                     $coupon['affiliate_url'],
                     $coupon['button_text'],
+                    $coupon['expires_at'],
                     $ts,
                     $ts,
                     $ts,
@@ -977,6 +991,7 @@ function api_import_coupons_sample(): array
                 'affiliate_url' => 'https://jennibag.com/products/jennitravelbag-2?sca_ref=10362718',
                 'is_verified' => true,
                 'button_text' => 'Get Code',
+                'expires_at' => '2026-12-31 23:59:59',
             ],
             [
                 'offer_id' => 'ext-1002',

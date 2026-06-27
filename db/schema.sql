@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS stores (
     logo_url VARCHAR(512) NULL,
     meta_title VARCHAR(512) NULL,
     meta_description TEXT NULL,
+    website VARCHAR(512) NULL,
+    domain_key VARCHAR(191) NULL,
+    category_name VARCHAR(255) NULL,
+    category_id INT UNSIGNED NULL,
+    detect_payload MEDIUMTEXT NULL,
+    detected_at DATETIME NULL,
     content_hash CHAR(64) NULL,
     coupon_section_hash CHAR(64) NULL,
     etag VARCHAR(255) NULL,
@@ -44,7 +50,9 @@ CREATE TABLE IF NOT EXISTS stores (
     last_changed_at DATETIME NULL,
     UNIQUE KEY uk_stores_slug (slug),
     KEY idx_stores_priority (priority, last_crawled_at),
-    KEY idx_stores_active (is_active)
+    KEY idx_stores_active (is_active),
+    KEY idx_stores_domain_key (domain_key),
+    KEY idx_stores_category_id (category_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS coupons (
@@ -61,6 +69,7 @@ CREATE TABLE IF NOT EXISTS coupons (
     offer_url VARCHAR(512) NULL,
     affiliate_url VARCHAR(512) NULL,
     button_text VARCHAR(50) NULL,
+    expires_at DATETIME NULL,
     status VARCHAR(20) NOT NULL DEFAULT 'active',
     coupon_month CHAR(7) NULL COMMENT 'YYYY-MM — coupon valid for this month only',
     first_seen_at DATETIME NOT NULL,

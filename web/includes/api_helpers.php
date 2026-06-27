@@ -137,6 +137,7 @@ function api_format_offer(array $coupon): array
         'button_text' => coupon_button_label($coupon),
         'affiliate_url' => affiliate_link($coupon['affiliate_url'] ?? null, $coupon['offer_url'] ?? null),
         'offer_url' => $coupon['offer_url'] ?: null,
+        'expires_at' => $coupon['expires_at'] ?? null,
         'last_seen_at' => $coupon['last_seen_at'] ?? null,
     ];
 }
@@ -259,7 +260,7 @@ function api_find_coupons_by_store(string $store, int $limit = 100, int $offset 
     );
 
     $rows = db_fetch_all(
-        "SELECT c.discount_label, c.title, c.coupon_code, c.coupon_type
+        "SELECT c.discount_label, c.title, c.coupon_code, c.coupon_type, c.expires_at
          FROM coupons c
          WHERE c.store_id = ? AND {$activeWhere}
          ORDER BY c.is_verified DESC, c.coupon_type ASC, c.id ASC
@@ -273,14 +274,180 @@ function api_find_coupons_by_store(string $store, int $limit = 100, int $offset 
             'title' => $row['title'],
             'coupon_code' => $row['coupon_code'] ?: null,
             'coupon_type' => $row['coupon_type'],
+            'expires_at' => $row['expires_at'] ?: null,
         ];
     }, $rows);
 
     return [
         'store' => $store,
+        'store_id' => $storeId,
         'total' => $total,
         'coupons' => $coupons,
     ];
+}
+
+function api_wants_store_profile(): bool
+{
+    $value = strtolower(trim((string) ($_GET['profile'] ?? $_GET['include_profile'] ?? '')));
+
+    return in_array($value, ['1', 'true', 'yes'], true);
+}
+
+/** @param array<string, mixed> $store */
+function api_format_detect_profile(array $store): array
+{
+    $payload = [];
+
+    if (!empty($store['detect_payload'])) {
+        $decoded = json_decode((string) $store['detect_payload'], true);
+        if (is_array($decoded)) {
+            $payload = $decoded;
+        }
+    }
+
+    $domain = !empty($store['domain_key'])
+        ? (string) $store['domain_key']
+        : merchant_host_from_url($store['affiliate_url'] ?? null);
+
+    return [
+        'store_id' => (int) $store['id'],
+        'slug' => $store['slug'],
+        'name' => $store['name'],
+        'domain' => $domain,
+        'website' => $store['website'] ?? null,
+        'affiliate_url' => $store['affiliate_url'] ?? null,
+        'logo' => logo_url($store['logo_url'] ?? null, $store['name'] ?? ''),
+        'meta_title' => $store['meta_title'] ?? null,
+        'meta_description' => $store['meta_description'] ?? null,
+        'category_name' => $store['category_name'] ?? null,
+        'detected_at' => $store['detected_at'] ?? null,
+        'page_title' => $payload['page_title'] ?? null,
+        'final_url' => $payload['final_url'] ?? ($store['website'] ?? null),
+        'faqs' => is_array($payload['faqs'] ?? null) ? $payload['faqs'] : [],
+        'products' => is_array($payload['products'] ?? null) ? $payload['products'] : [],
+        'generated_blog' => is_array($payload['generated_blog'] ?? null) ? $payload['generated_blog'] : null,
+    ];
+}
+
+function api_load_store_row(int $storeId): ?array
+{
+    $store = db_fetch(
+        'SELECT * FROM stores WHERE id = ? AND is_active = 1 LIMIT 1',
+        [$storeId]
+    );
+
+    return $store ?: null;
+}
+
+function api_find_store_row_for_profile(string $store): ?array
+{
+    $lookupKey = api_normalize_lookup_key($store);
+
+    if ($lookupKey !== '') {
+        $byDomain = db_fetch(
+            'SELECT * FROM stores WHERE is_active = 1 AND domain_key = ? ORDER BY detected_at DESC, id DESC LIMIT 1',
+            [$lookupKey]
+        );
+        if ($byDomain) {
+            return $byDomain;
+        }
+    }
+
+    $resolved = api_resolve_store_for_search($store);
+    if ($resolved !== null) {
+        return api_load_store_row((int) $resolved['store_id']);
+    }
+
+    if ($lookupKey !== '' && str_contains($lookupKey, '.')) {
+        $stores = db_fetch_all(
+            'SELECT * FROM stores WHERE is_active = 1 AND affiliate_url IS NOT NULL AND affiliate_url != \'\''
+        );
+        foreach ($stores as $row) {
+            if (merchant_host_from_url($row['affiliate_url'] ?? null) === $lookupKey) {
+                return $row;
+            }
+        }
+    }
+
+    return null;
+}
+
+/** @param array<string, mixed> $info */
+function api_save_store_detect_profile(int $storeId, array $info): void
+{
+    $now = date('Y-m-d H:i:s');
+    $affiliateUrl = trim((string) ($info['affiliate_url'] ?? ''));
+    $website = trim((string) ($info['website'] ?? ''));
+    $logoUrl = trim((string) ($info['logo_url'] ?? $info['logo'] ?? ''));
+    $name = trim((string) ($info['name'] ?? ''));
+    $metaTitle = trim((string) ($info['meta_title'] ?? ''));
+    $metaDescription = trim((string) ($info['meta_description'] ?? ''));
+    $categoryName = trim((string) ($info['category_name'] ?? ''));
+
+    $domainKey = trim((string) ($info['domain_key'] ?? $info['domain'] ?? $info['lookup_key'] ?? ''));
+    if ($domainKey === '') {
+        $domainKey = merchant_host_from_url($website !== '' ? $website : $affiliateUrl) ?? '';
+    }
+    $domainKey = api_normalize_lookup_key($domainKey);
+
+    $detectPayload = $info['detect_payload'] ?? null;
+    if (!is_array($detectPayload)) {
+        $detectPayload = array_filter([
+            'page_title' => $info['page_title'] ?? null,
+            'final_url' => $info['final_url'] ?? null,
+            'faqs' => is_array($info['faqs'] ?? null) ? $info['faqs'] : null,
+            'products' => is_array($info['products'] ?? null) ? $info['products'] : null,
+            'generated_blog' => is_array($info['generated_blog'] ?? null) ? $info['generated_blog'] : null,
+        ], static fn ($value) => $value !== null && $value !== [] && $value !== '');
+    }
+
+    $detectPayloadJson = $detectPayload !== [] && $detectPayload !== null
+        ? json_encode($detectPayload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+        : null;
+
+    $hasDetectData = $detectPayloadJson !== null
+        || $logoUrl !== ''
+        || $website !== ''
+        || $metaDescription !== ''
+        || $categoryName !== '';
+
+    if (!$hasDetectData) {
+        return;
+    }
+
+    db_execute(
+        'UPDATE stores SET
+            name = COALESCE(NULLIF(?, \'\'), name),
+            affiliate_url = COALESCE(NULLIF(?, \'\'), affiliate_url),
+            website = COALESCE(NULLIF(?, \'\'), website),
+            domain_key = COALESCE(NULLIF(?, \'\'), domain_key),
+            logo_url = COALESCE(NULLIF(?, \'\'), logo_url),
+            meta_title = COALESCE(NULLIF(?, \'\'), meta_title),
+            meta_description = COALESCE(NULLIF(?, \'\'), meta_description),
+            category_name = COALESCE(NULLIF(?, \'\'), category_name),
+            detect_payload = COALESCE(?, detect_payload),
+            detected_at = ?,
+            last_changed_at = ?
+         WHERE id = ?',
+        [
+            $name,
+            $affiliateUrl,
+            $website,
+            $domainKey,
+            $logoUrl,
+            $metaTitle,
+            $metaDescription,
+            $categoryName,
+            $detectPayloadJson,
+            $now,
+            $now,
+            $storeId,
+        ]
+    );
+
+    if ($domainKey !== '') {
+        api_rebuild_single_lookup_key($domainKey);
+    }
 }
 
 function api_read_json_body(): array
@@ -367,6 +534,10 @@ function api_import_coupons(array $payload): array
     $sync = sync_store_coupons((int) $store['id'], $normalized, $syncMode);
     $deduped = dedupe_store_coupons_by_label((int) $store['id']);
     api_refresh_lookup_for_store((int) $store['id']);
+    api_save_store_detect_profile((int) $store['id'], array_merge(
+        is_array($payload['store'] ?? null) ? $payload['store'] : [],
+        is_array($payload['detect'] ?? null) ? $payload['detect'] : []
+    ));
 
     $activeCount = api_count_store_api_coupons((int) $store['id']);
 

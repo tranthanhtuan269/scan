@@ -46,6 +46,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET') {
             'description' => 'optional',
             'offer_url' => 'optional',
             'button_text' => 'optional',
+            'expires_at' => 'optional datetime (Y-m-d H:i:s or ISO 8601)',
         ],
         'sample' => api_import_coupons_sample(),
         'log_file' => 'logs/api-import.log',

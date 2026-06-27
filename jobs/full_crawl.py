@@ -54,7 +54,9 @@ def main():
             if not slug:
                 continue
             url = f"{BASE_URL}/store/{slug}"
-            changed = pipeline.process_store(url, slug, priority=2, force=True)
+            changed = pipeline.process_store(
+                url, slug, priority=2, force=True, skip_if_exists=True
+            )
             status = "UPDATED" if changed else "SKIP"
             print(f"[{idx}/{len(store_urls)}] {slug}: {status}")
 

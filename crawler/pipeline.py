@@ -3,9 +3,10 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from config.settings import RAW_HTML_DIR, SAVE_RAW_HTML
+from config.settings import BASE_URL, RAW_HTML_DIR, SAVE_RAW_HTML
 from crawler.discovery import Discovery
 from crawler.fetcher import Fetcher
+from crawler.logo_assets import localize_store_logo
 from crawler.parsers.blog import parse_blog_page
 from crawler.parsers.store import parse_store_page
 from crawler.utils import classify_url
@@ -39,8 +40,14 @@ class CrawlPipeline:
         slug: str,
         priority: int = 3,
         force: bool = False,
+        skip_if_exists: bool = True,
+        site_base_url: str | None = None,
     ) -> bool:
         existing = self.repo.get_store_by_slug(slug)
+        if skip_if_exists and existing:
+            self.stats["urls_skipped"] += 1
+            return False
+
         is_new = existing is None
 
         result = self.fetcher.fetch(
@@ -74,6 +81,7 @@ class CrawlPipeline:
         parsed["last_modified"] = result.last_modified
         parsed["http_status"] = result.status_code
         parsed["priority"] = priority
+        localize_store_logo(parsed, slug, site_base_url or BASE_URL)
 
         if (
             not force

@@ -6,4 +6,7 @@ __pycache__/
 .venv/
 venv/
 storage/raw/
+web/uploads/store-logos/*
+!web/uploads/store-logos/.gitkeep
 *.log
+data.txt

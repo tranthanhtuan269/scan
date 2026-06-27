@@ -34,7 +34,7 @@ api_json([
                 'ai' => 'Set 0 to disable AI fallback when store not in DB',
                 'profile' => 'Set 1 to include cached store_profile (logo, meta, detect payload) when store exists in DB',
             ],
-            'response_fields' => ['discount_label', 'title', 'coupon_code', 'coupon_type', 'expires_at', 'store_profile (when profile=1)'],
+            'response_fields' => ['discount_label', 'title', 'coupon_code', 'coupon_type', 'expires_at', 'logo', 'category_id', 'category_name', 'category', 'store_profile (when profile=1)'],
             'example' => url('api/coupons') . '?site=thuoc360&store=alsoasked',
         ],
         [

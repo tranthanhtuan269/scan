@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Crawl globalcouponshub.com stores, coupons, and blog posts into the scan DB."""
+"""Crawl coreluxreview.com stores, coupons, and blog posts into the scan DB."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT))
 
 from crawler.couponspeak_site_crawler import crawl_couponspeak_platform  # noqa: E402
 from crawler.fetcher import Fetcher  # noqa: E402
-from crawler.parsers.globalcouponshub_store import (  # noqa: E402
+from crawler.parsers.coreluxreview_store import (  # noqa: E402
     BASE_URL,
     db_slug,
     parse_store_page,
@@ -23,7 +23,7 @@ from db.repository import Repository  # noqa: E402
 def main() -> int:
     sys.stdout.reconfigure(line_buffering=True)
 
-    parser = argparse.ArgumentParser(description="Crawl globalcouponshub.com into scan DB")
+    parser = argparse.ArgumentParser(description="Crawl coreluxreview.com into scan DB")
     parser.add_argument(
         "--seeds-only",
         action="store_true",
@@ -53,11 +53,11 @@ def main() -> int:
         "urls_failed": 0,
     }
 
-    print("=== GLOBALCOUPONSHUB CRAWL START ===")
+    print("=== CORELUXREVIEW CRAWL START ===")
 
     try:
         store_count, blog_count = crawl_couponspeak_platform(
-            site_label="globalcouponshub",
+            site_label="coreluxreview",
             base_url=BASE_URL,
             repo=repo,
             fetcher=fetcher,
@@ -71,10 +71,10 @@ def main() -> int:
 
         db_stats = repo.count_stats()
         stats.update(db_stats)
-        stats["notes"] = f"globalcouponshub stores={store_count} blogs={blog_count}"
+        stats["notes"] = f"coreluxreview stores={store_count} blogs={blog_count}"
         repo.finish_run(run_id, stats)
 
-        print("=== GLOBALCOUPONSHUB CRAWL DONE ===")
+        print("=== CORELUXREVIEW CRAWL DONE ===")
         print(f"Stores discovered: {store_count}")
         print(f"Blog posts: {blog_count}")
         print(f"New: {stats['urls_new']} | Skipped: {stats['urls_skipped']} | Failed: {stats['urls_failed']}")

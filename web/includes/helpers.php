@@ -37,7 +37,9 @@ function logo_url(?string $url, string $name): string
         return $url;
     }
     if ($url && str_starts_with($url, '/')) {
-        return 'https://couponspeak.com' . $url;
+        $base = rtrim((string) ($_ENV['BASE_URL'] ?? 'https://couponspeak.com'), '/');
+
+        return $base . $url;
     }
     $letter = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $name) ?: 'S', 0, 1));
     return 'https://ui-avatars.com/api/?name=' . urlencode($letter) . '&background=017cc2&color=fff&size=150&bold=true';
@@ -184,6 +186,27 @@ function sql_store_dedupe_key(string $alias = 's'): string
     END";
 }
 
+/** Merchant identity for duplicate store detection (domain first, then affiliate). */
+function sql_store_merchant_dedupe_key(string $alias = 's'): string
+{
+    $affiliateKey = sql_store_dedupe_key($alias);
+    $websiteHost = "LOWER(TRIM(LEADING 'www.' FROM SUBSTRING_INDEX(SUBSTRING_INDEX(SUBSTRING_INDEX({$alias}.website,'?',1),'://',-1),'/',1)))";
+
+    return "CASE
+        WHEN {$alias}.domain_key IS NOT NULL AND {$alias}.domain_key != ''
+            THEN CONCAT('domain:', LOWER({$alias}.domain_key))
+        WHEN {$alias}.website IS NOT NULL AND {$alias}.website != ''
+            AND {$websiteHost} != ''
+            THEN CONCAT('domain:', {$websiteHost})
+        ELSE {$affiliateKey}
+    END";
+}
+
+function sql_store_has_logo(string $alias = 's'): string
+{
+    return "(CASE WHEN {$alias}.logo_url IS NOT NULL AND TRIM({$alias}.logo_url) != '' THEN 1 ELSE 0 END)";
+}
+
 function sql_canonical_stores_join(string $alias = 's'): string
 {
     // Legacy duplicates are marked is_active = -1 in DB; only show active winners.
@@ -204,7 +227,7 @@ function resolve_canonical_store(array $store): array
         "SELECT s.* FROM stores s
          WHERE s.is_active = 1
            AND {$dedupeKey} = (SELECT {$sourceKey} FROM stores src WHERE src.id = ? LIMIT 1)
-         ORDER BY (
+         ORDER BY " . sql_store_has_logo('s') . " DESC, (
              SELECT COUNT(*) FROM coupons c WHERE c.store_id = s.id AND c.status = 'active'
          ) DESC, s.id ASC
          LIMIT 1",
@@ -409,8 +432,9 @@ function api_normalize_lookup_key(string $store): string
     $key = preg_replace('#^https?://#i', '', $key);
     $key = preg_replace('#^www\.#i', '', $key);
 
-    if (preg_match('~^([^/?#]+)~', $key, $matches)) {
-        return $matches[1];
+    $length = strcspn($key, '/?#');
+    if ($length > 0) {
+        return substr($key, 0, $length);
     }
 
     return $key;

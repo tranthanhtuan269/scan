@@ -44,7 +44,13 @@ def main():
             for store_url in sorted(discovered):
                 _t, slug = classify_url(store_url)
                 if slug and slug not in known:
-                    pipeline.process_store(f"{BASE_URL}/store/{slug}", slug, priority=1, force=True)
+                    pipeline.process_store(
+                        f"{BASE_URL}/store/{slug}",
+                        slug,
+                        priority=1,
+                        force=True,
+                        skip_if_exists=True,
+                    )
                     print(f"DISCOVERED NEW: {slug}")
 
         hot_slugs = pipeline.collect_hot_store_slugs(SEED_URLS)

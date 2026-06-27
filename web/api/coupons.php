@@ -9,7 +9,8 @@ declare(strict_types=1);
  * Tìm coupon theo tên store (name/slug) hoặc affiliate_url chứa từ khóa.
  * Chỉ trả coupon có affiliate_url. Yêu cầu site đã đăng ký trong bảng sitename.
  *
- * profile=1: kèm store_profile (logo, meta, blog cache…) nếu store đã có trong DB.
+ * Luôn kèm logo + category (nếu store có trong DB).
+ * profile=1: thêm store_profile đầy đủ (meta, detect payload, blog cache…).
  *
  * Khi không có store/coupon trong DB: tự gọi AI (nếu API_AI_ENABLED=1) → import → trả lại.
  * Query: api_ai=URL endpoint (override .env), ai=0 tắt fallback AI cho request đó.
@@ -28,42 +29,28 @@ $includeProfile = api_wants_store_profile();
 $result = api_find_coupons_by_store($store, $limit, $offset);
 $aiMeta = null;
 $storeProfile = null;
+$storeRow = api_resolve_store_row($store, !empty($result['store_id']) ? (int) $result['store_id'] : null);
+$storeMeta = $storeRow ? api_format_store_api_meta($storeRow) : null;
 
-if ($includeProfile) {
-    $storeRow = null;
-    if (!empty($result['store_id'])) {
-        $storeRow = api_load_store_row((int) $result['store_id']);
-    }
-    if ($storeRow === null) {
-        $storeRow = api_find_store_row_for_profile($store);
-    }
-    if ($storeRow) {
-        $storeProfile = api_format_detect_profile($storeRow);
-    }
+if ($includeProfile && $storeRow) {
+    $storeProfile = api_format_detect_profile($storeRow);
 }
 
 if ($result['total'] === 0) {
     $aiMeta = api_ai_fetch_and_import_store($store, $site['name']);
     if ($aiMeta !== null && !empty($aiMeta['imported'])) {
         $result = api_find_coupons_by_store($store, $limit, $offset);
-        if ($includeProfile) {
-            $storeRow = null;
-            if (!empty($result['store_id'])) {
-                $storeRow = api_load_store_row((int) $result['store_id']);
-            }
-            if ($storeRow === null) {
-                $storeRow = api_find_store_row_for_profile($store);
-            }
-            if ($storeRow) {
-                $storeProfile = api_format_detect_profile($storeRow);
-            }
+        $storeRow = api_resolve_store_row($store, !empty($result['store_id']) ? (int) $result['store_id'] : null);
+        $storeMeta = $storeRow ? api_format_store_api_meta($storeRow) : null;
+        if ($includeProfile && $storeRow) {
+            $storeProfile = api_format_detect_profile($storeRow);
         }
     }
 }
 
 $pager = paginate($result['total'], $page, $limit);
 
-if ($result['total'] === 0 && $storeProfile === null) {
+if ($result['total'] === 0 && $storeProfile === null && $storeMeta === null) {
     $empty = [
         'success' => true,
         'site' => $site['name'],
@@ -91,6 +78,9 @@ $response = [
     ],
     'coupons' => $result['coupons'],
 ];
+if ($storeMeta !== null) {
+    api_apply_store_meta_to_response($response, $storeMeta);
+}
 if ($aiMeta !== null && !empty($aiMeta['imported'])) {
     $response['ai'] = $aiMeta;
 }

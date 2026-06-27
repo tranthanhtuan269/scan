@@ -1,7 +1,6 @@
 -- Store detect profile cache for fast affiliate import (hako / partner sites).
 -- Populated via POST /api/coupons/import store.* fields; read via GET /api/coupons?profile=1
-
-USE couponspeak_crawl;
+-- Run: mysql -u root scan < db/migrations/004_store_detect_profile.sql
 
 ALTER TABLE stores
     ADD COLUMN website VARCHAR(512) NULL AFTER affiliate_url,

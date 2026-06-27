@@ -293,6 +293,50 @@ function api_wants_store_profile(): bool
     return in_array($value, ['1', 'true', 'yes'], true);
 }
 
+function api_resolve_store_row(string $storeQuery, ?int $storeId = null): ?array
+{
+    if ($storeId !== null && $storeId > 0) {
+        $row = api_load_store_row($storeId);
+        if ($row !== null) {
+            return $row;
+        }
+    }
+
+    return api_find_store_row_for_profile($storeQuery);
+}
+
+/** @param array<string, mixed> $store */
+function api_format_store_api_meta(array $store): array
+{
+    $categoryId = $store['category_id'] ?? null;
+
+    return [
+        'store_id' => (int) $store['id'],
+        'slug' => $store['slug'],
+        'name' => $store['name'],
+        'logo' => logo_url($store['logo_url'] ?? null, (string) ($store['name'] ?? '')),
+        'category_id' => $categoryId !== null && $categoryId !== '' ? (int) $categoryId : null,
+        'category_name' => !empty($store['category_name']) ? (string) $store['category_name'] : null,
+    ];
+}
+
+/** @param array<string, mixed> $meta */
+function api_apply_store_meta_to_response(array &$response, array $meta): void
+{
+    $response['logo'] = $meta['logo'];
+    $response['category_id'] = $meta['category_id'];
+    $response['category_name'] = $meta['category_name'];
+    $response['category'] = $meta['category_id'] !== null || $meta['category_name'] !== null
+        ? [
+            'id' => $meta['category_id'],
+            'name' => $meta['category_name'],
+        ]
+        : null;
+    $response['store_id'] = $meta['store_id'];
+    $response['store_slug'] = $meta['slug'];
+    $response['store_name'] = $meta['name'];
+}
+
 /** @param array<string, mixed> $store */
 function api_format_detect_profile(array $store): array
 {
@@ -319,7 +363,10 @@ function api_format_detect_profile(array $store): array
         'logo' => logo_url($store['logo_url'] ?? null, $store['name'] ?? ''),
         'meta_title' => $store['meta_title'] ?? null,
         'meta_description' => $store['meta_description'] ?? null,
-        'category_name' => $store['category_name'] ?? null,
+        'category_name' => !empty($store['category_name']) ? (string) $store['category_name'] : null,
+        'category_id' => isset($store['category_id']) && $store['category_id'] !== null && $store['category_id'] !== ''
+            ? (int) $store['category_id']
+            : null,
         'detected_at' => $store['detected_at'] ?? null,
         'page_title' => $payload['page_title'] ?? null,
         'final_url' => $payload['final_url'] ?? ($store['website'] ?? null),
@@ -383,6 +430,8 @@ function api_save_store_detect_profile(int $storeId, array $info): void
     $metaTitle = trim((string) ($info['meta_title'] ?? ''));
     $metaDescription = trim((string) ($info['meta_description'] ?? ''));
     $categoryName = trim((string) ($info['category_name'] ?? ''));
+    $categoryId = $info['category_id'] ?? null;
+    $categoryId = $categoryId !== null && $categoryId !== '' ? (int) $categoryId : null;
 
     $domainKey = trim((string) ($info['domain_key'] ?? $info['domain'] ?? $info['lookup_key'] ?? ''));
     if ($domainKey === '') {
@@ -409,7 +458,8 @@ function api_save_store_detect_profile(int $storeId, array $info): void
         || $logoUrl !== ''
         || $website !== ''
         || $metaDescription !== ''
-        || $categoryName !== '';
+        || $categoryName !== ''
+        || $categoryId !== null;
 
     if (!$hasDetectData) {
         return;
@@ -425,6 +475,7 @@ function api_save_store_detect_profile(int $storeId, array $info): void
             meta_title = COALESCE(NULLIF(?, \'\'), meta_title),
             meta_description = COALESCE(NULLIF(?, \'\'), meta_description),
             category_name = COALESCE(NULLIF(?, \'\'), category_name),
+            category_id = COALESCE(?, category_id),
             detect_payload = COALESCE(?, detect_payload),
             detected_at = ?,
             last_changed_at = ?
@@ -438,6 +489,7 @@ function api_save_store_detect_profile(int $storeId, array $info): void
             $metaTitle,
             $metaDescription,
             $categoryName,
+            $categoryId,
             $detectPayloadJson,
             $now,
             $now,

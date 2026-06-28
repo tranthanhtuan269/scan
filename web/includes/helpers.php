@@ -31,15 +31,28 @@ function redirect(string $path): never
     exit;
 }
 
+function public_base_url(): string
+{
+    $host = trim((string) ($_SERVER['HTTP_HOST'] ?? ''));
+
+    if ($host !== '') {
+        $https = (! empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['SERVER_PORT']) && (int) $_SERVER['SERVER_PORT'] === 443)
+            || (strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https');
+
+        return ($https ? 'https' : 'http') . '://' . $host;
+    }
+
+    return rtrim((string) ($_ENV['BASE_URL'] ?? 'https://couponspeak.com'), '/');
+}
+
 function logo_url(?string $url, string $name): string
 {
     if ($url && filter_var($url, FILTER_VALIDATE_URL)) {
         return $url;
     }
     if ($url && str_starts_with($url, '/')) {
-        $base = rtrim((string) ($_ENV['BASE_URL'] ?? 'https://couponspeak.com'), '/');
-
-        return $base . $url;
+        return public_base_url() . $url;
     }
     $letter = strtoupper(substr(preg_replace('/[^a-zA-Z0-9]/', '', $name) ?: 'S', 0, 1));
     return 'https://ui-avatars.com/api/?name=' . urlencode($letter) . '&background=017cc2&color=fff&size=150&bold=true';
